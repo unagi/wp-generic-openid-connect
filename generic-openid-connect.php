@@ -227,7 +227,7 @@ class GenericOpenIDConnect {
 		if ( isset( $_GET['plugin-error'] ) ) {
 			echo $this->styled_error_message( $_GET['plugin-error'] );
 		} elseif ( $this->use_autologin && !isset( $_GET['loggedout']) ){
-			wp_redirect($this->ep_login . '&client_id=' . urlencode($this->client_id) . '&redirect_uri=' . urlencode($this->redirect_url));
+			wp_redirect($this->ep_login . '?response_type=code&client_id=' . urlencode($this->client_id) . '&redirect_uri=' . urlencode($this->redirect_url));
 			exit;
 		}
 	}
