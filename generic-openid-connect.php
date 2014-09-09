@@ -29,12 +29,12 @@ class GenericOpenIDConnect {
 	);
 
 	static $ERR_MES = array(
-		1 => 'Cannot get authorization response',
-		2 => 'Cannot get token response',
-		3 => 'Cannot get valid access token',
-		4 => 'Cannot get user claims',
-		5 => 'Cannot create authorized user',
-		6 => 'User creation failed',
+		1  => 'Cannot get authorization response',
+		2  => 'Cannot get token response',
+		3  => 'Cannot get valid access token',
+		4  => 'Cannot get user claims',
+		5  => 'Cannot create authorized user',
+		6  => 'User creation failed',
 		99 => 'Unknown error'
 	);
 
@@ -232,7 +232,7 @@ class GenericOpenIDConnect {
 		}
 	}
 
-	private function style_error_message($errno) {
+	private function styled_error_message($errno) {
 		$message = self::$ERR_MES[$errno];
 		return '<div style="padding:10px;background-color:#FFDFDD;border:1px solid #ced9ea;border-radius:3px;-webkit-border-radius:3px;-moz-border-radius:3px;"><p style="line-height:1.6em;"><strong>Error!</strong>&nbsp;' . $message . '</p></div><br>';
 	}
