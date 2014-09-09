@@ -26,6 +26,8 @@ class GenericOpenIDConnect {
 		'no_sslverify'  => 'Disable SSL Verify',
 		'client_id'     => 'Client ID',
 		'client_secret' => 'Client Secret Key',
+		'scope'         => 'OpenID Scope',
+		'identity_key'  => 'Identity Key',
 		'allowed_regex' => ''
 	);
 
@@ -82,14 +84,14 @@ class GenericOpenIDConnect {
 				)
 			)
 		));
-		if ( is_wp_error( $oauth_result ) ) {
+		if ( is_wp_error( $token_result ) ) {
 			$this->error_redirect(2);
 		}
-		$oauth_expiry = $oauth_response['expires_in'] + current_time( 'timestamp', true );
 
 		$token_response = json_decode( $token_result['body'], true );
-		if ( isset( $token_response['id_token'] ) && false ) {
-			$user_claim = array();
+		if ( isset( $token_response['id_token'] ) ) {
+			$jwt_arr = explode('.', $token_response['id_token'] );
+			$user_claim = json_decode( base64_decode($jwt_arr[1] ), true );
 		} elseif ( isset( $token_response['access_token'] ) ){
 			$user_claim_result = wp_remote_get(
 				$this->ep_userinfo . '?access_token=' . $token_response['access_token'],
@@ -103,13 +105,13 @@ class GenericOpenIDConnect {
 			$this->error_redirect(4);
 		}
 
-		$user_id   = $user_claim['sub'];
+		$user_id   = $user_claim[$this->identity_key];
 		if ( strlen($user_id) == 0 ) {
 			$this->error_redirect(5);
 		}
 
-		setcookie( self::PLUGIN_ID . '_id_token', $oauth_id_token, $oauth_expiry, COOKIEPATH, COOKIE_DOMAIN );
-		setcookie( self::PLUGIN_ID . '_username', $user_id,  ( time() + ( 86400 * 7) ), COOKIEPATH, COOKIE_DOMAIN );
+		$oauth_expiry = $token_response['expires_in'] + current_time( 'timestamp', true );
+		setcookie( self::PLUGIN_ID . '_username', $user_id, $oauth_expiry, COOKIEPATH, COOKIE_DOMAIN );
 		$user = get_user_by( 'login', $user_id );
 		if (! isset( $user->ID ) ) {
 			// challenge user create
@@ -170,7 +172,7 @@ class GenericOpenIDConnect {
 	public function is_valid_id_token() {
 		$is_openid_connect_user = get_user_meta( wp_get_current_user()->ID, 'openid-connect-user', true );
 		
-		if ( is_user_logged_in() && $is_openid_connect_user != '' && ! isset( $_COOKIE[self::PLUGIN_ID . '_id_token'] ) ) {
+		if ( is_user_logged_in() && $is_openid_connect_user != '' && ! isset( $_COOKIE[self::PLUGIN_ID . '_user_id'] ) ) {
 			wp_logout();
 			wp_redirect( wp_login_url() );
 			exit;
@@ -248,8 +250,8 @@ class GenericOpenIDConnect {
 
 		if ( isset( $_GET['plugin-error'] ) ) {
 			echo $this->styled_error_message( $_GET['plugin-error'] );
-		} elseif ( $this->use_autologin && !isset( $_GET['loggedout']) ){
-			wp_redirect($this->ep_login . '?response_type=code&client_id=' . urlencode($this->client_id) . '&redirect_uri=' . urlencode($this->redirect_url));
+		} elseif ( $this->use_autologin && !isset( $_GET['loggedout'] ) ){
+			wp_redirect( $this->ep_login . '?scope=' . urlencode( $this->scope ) . '&response_type=code&client_id=' . urlencode( $this->client_id ) . '&redirect_uri=' . urlencode( $this->redirect_url ) );
 			exit;
 		}
 	}
