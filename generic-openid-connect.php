@@ -172,7 +172,7 @@ class GenericOpenIDConnect {
 	public function is_valid_id_token() {
 		$is_openid_connect_user = get_user_meta( wp_get_current_user()->ID, 'openid-connect-user', true );
 		
-		if ( is_user_logged_in() && $is_openid_connect_user != '' && ! isset( $_COOKIE[self::PLUGIN_ID . '_user_id'] ) ) {
+		if ( is_user_logged_in() && $is_openid_connect_user != '' && ! isset( $_COOKIE[self::PLUGIN_ID . '_username'] ) ) {
 			wp_logout();
 			wp_redirect( wp_login_url() );
 			exit;
