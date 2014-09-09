@@ -17,24 +17,28 @@ class GenericOpenIDConnect {
 	const PLUGIN_ID = 'gen_openid_con';
 	const PLUGIN_LONG_ID = 'generic-openid-connect';
 
-	/* config parameters on admin page */
+	/* config parameters on admin page. */
 	static $PARAMETERS = array(
-		'ep_login' => 'Login Endpoint URL', self::PLUGIN_ID,
-		'ep_token' => 'Token Validation Endpoint URL',
-		'ep_userinfo' => 'Userinfo Endpoint URL',
-		'client_id' => 'Client ID',
+		'use_autologin' => 'Enable SSO',
+		'ep_login'      => 'Login Endpoint URL',
+		'ep_token'      => 'Token Validation Endpoint URL',
+		'ep_userinfo'   => 'Userinfo Endpoint URL',
+		'no_sslverify'  => 'Disable SSL Verify',
+		'client_id'     => 'Client ID',
 		'client_secret' => 'Client Secret Key',
-		'use_autologin' => '',
+		'scope'         => 'OpenID Scope',
+		'identity_key'  => 'Identity Key',
 		'allowed_regex' => ''
 	);
 
 	static $ERR_MES = array(
-		1 => 'Cannot get authorization response',
-		2 => 'Cannot get token response',
-		3 => 'Cannot get valid access token',
-		4 => 'Cannot get user claims',
-		5 => 'Cannot create authorized user',
-		6 => 'User creation failed',
+		1  => 'Cannot get authorization response',
+		2  => 'Cannot get token response',
+		3  => 'Cannot get user claims',
+		4  => 'Cannot get valid token',
+		5  => 'Cannot get user key',
+		6  => 'Cannot create authorized user',
+		7  => 'User creation failed',
 		99 => 'Unknown error'
 	);
 
@@ -63,14 +67,14 @@ class GenericOpenIDConnect {
 	 */
 	public function callback() {
 		if ( !isset( $_GET['code'] ) ) {
-			// ERR01: cannot get authorization response
-			wp_redirect( wp_login_url() . '?plugin-error=1' );
+			$this->error_redirect(1);
 		} elseif ( isset( $_GET['error'] ) ) {
-			// ERR99: unknown error
-			wp_redirect( wp_login_url() . '?plugin-error=99' );
+			$this->error_redirect(99);
 		}
 
-		$oauth_result = wp_remote_post( $this->ep_token, array(
+		$token_result = wp_remote_post(
+			$this->ep_token,
+			$this->get_wp_request_parameter(array(
 				'body' => array(
 					'code'          => $_GET['code'],
 					'client_id'     => $this->client_id,
@@ -78,43 +82,47 @@ class GenericOpenIDConnect {
 					'redirect_uri'  => $this->redirect_url,
 					'grant_type'    => 'authorization_code'
 				)
+			)
 		));
-		if ( is_wp_error( $oauth_result ) ) {
-			// ERR02: cannot get token response
-			wp_redirect( wp_login_url() . "?plugin-error=2" );
-		}
-		$oauth_response = json_decode( $oauth_result['body'], true );
-		if ( !isset( $oauth_response['access_token'] ) ) {
-			// ERR03: cannot get valid access token
-			wp_redirect( wp_login_url() . "?plugin-error=3" );
+		if ( is_wp_error( $token_result ) ) {
+			$this->error_redirect(2);
 		}
 
-		$oauth_id_token = $oauth_response['id_token'];
-		$idtoken_validation_result = wp_remote_get( $this->ep_userinfo . '?id_token=' . $oauth_id_token);
-
-		if( is_wp_error($idtoken_validation_result)) {
-			// ERR04: cannot get user claim
-			wp_redirect( wp_login_url() . "?plugin-error=4" );
+		$token_response = json_decode( $token_result['body'], true );
+		if ( isset( $token_response['id_token'] ) ) {
+			$jwt_arr = explode('.', $token_response['id_token'] );
+			$user_claim = json_decode( base64_decode($jwt_arr[1] ), true );
+		} elseif ( isset( $token_response['access_token'] ) ){
+			$user_claim_result = wp_remote_get(
+				$this->ep_userinfo . '?access_token=' . $token_response['access_token'],
+				$this->get_wp_request_parameter( array() )
+			);
+			$user_claim = json_decode($user_claim_result['body'], true);
+			if( is_wp_error($user_claim_result)) {
+				$this->error_redirect(3);
+			}
+		} else {
+			$this->error_redirect(4);
 		}
-		$oauth_expiry     = $oauth_response['expires_in'] + current_time( 'timestamp', true );
-		$idtoken_response = json_decode($idtoken_validation_result['body'], true);
-		$user_id   = $idtoken_response['email'];
 
-		setcookie( self::PLUGIN_ID . '_id_token', $oauth_id_token, $oauth_expiry, COOKIEPATH, COOKIE_DOMAIN );
-		setcookie( self::PLUGIN_ID . '_username', $user_id,  ( time() + ( 86400 * 7) ), COOKIEPATH, COOKIE_DOMAIN );
+		$user_id   = $user_claim[$this->identity_key];
+		if ( strlen($user_id) == 0 ) {
+			$this->error_redirect(5);
+		}
+
+		$oauth_expiry = $token_response['expires_in'] + current_time( 'timestamp', true );
+		setcookie( self::PLUGIN_ID . '_username', $user_id, $oauth_expiry, COOKIEPATH, COOKIE_DOMAIN );
 		$user = get_user_by( 'login', $user_id );
 		if (! isset( $user->ID ) ) {
 			// challenge user create
-			if ( strlen( $this->allowed_regex ) > 0 && preg_match( $this->allowed_regex, $username ) ===  1) {
-				$user_id = wp_create_user( $username, wp_generate_password( 12, false ), $username);
-				$user = get_user_by( 'id', $user_id );
+			if ( strlen( $this->allowed_regex ) > 0 && preg_match( $this->allowed_regex, $user_id ) ===  1) {
+				$uid = wp_create_user( $user_id, wp_generate_password( 12, false ), $user_id );
+				$user = get_user_by( 'id', $uid );
 			} else {
-				// ERR05: cannot create authorized user
-				wp_redirect( wp_login_url() . '?plugin-error=5&authed_username=' . $oauth_username );
+				$this->error_redirect(6, $user_id);
 			}
 			if (! isset( $user->ID ) ) {
-				// ERR06: user creation failed
-				wp_redirect( wp_login_url() . '?plugin-error=6&authed_username=' . $oauth_username );
+				$this->error_redirect(7, $user_id);
 			}
 		}
 
@@ -124,6 +132,22 @@ class GenericOpenIDConnect {
 
 		wp_set_auth_cookie( $user->ID, false );
 		wp_redirect( home_url() );
+	}
+
+	private function get_wp_request_parameter($args) {
+		if ( $this->no_sslverify ) {
+			$args['sslverify'] = false;
+		}
+		return $args;
+    }
+
+	private function error_redirect($errno, $authed_username='') {
+		$url = wp_login_url() . '?plugin-error=' . $errno;
+		if ( $authed_username != '' ) {
+			$url .= '&authed_username=' . $authed_username;
+		}
+		wp_redirect( $url );
+		exit;
 	}
 
 	/**
@@ -148,7 +172,7 @@ class GenericOpenIDConnect {
 	public function is_valid_id_token() {
 		$is_openid_connect_user = get_user_meta( wp_get_current_user()->ID, 'openid-connect-user', true );
 		
-		if ( is_user_logged_in() && $is_openid_connect_user != '' && ! isset( $_COOKIE[self::PLUGIN_ID . '_id_token'] ) ) {
+		if ( is_user_logged_in() && $is_openid_connect_user != '' && ! isset( $_COOKIE[self::PLUGIN_ID . '_user_id'] ) ) {
 			wp_logout();
 			wp_redirect( wp_login_url() );
 			exit;
@@ -162,11 +186,11 @@ class GenericOpenIDConnect {
 	public function check_option( $input ) {
 
 		$options = array();
-		foreach ( self::$PARAMETERS as $key => $val ) {
-			if ( $key == 'use_autologin' ) {
-				$use_autologin = isset( $input['use_autologin'] );
-				$this->update_option_item( 'use_autologin', $use_autologin );
-				array_push( $options, $use_authlogin );
+		foreach ( array_keys( self::$PARAMETERS ) as $key ) {
+			if ( in_array($key, array( 'use_autologin', 'no_sslverify') ) ) {
+				$value = isset( $input[$key] );
+				$this->update_option_item( $key, $value );
+				array_push( $options, $value );
 			} else {
 				array_push( $options, $this->check_option_item($key, $input) );
 			}
@@ -210,11 +234,11 @@ class GenericOpenIDConnect {
 	public function print_text_field($args) {
 		list($key, $css_class, $add_opt) = $args;
 		echo '<input type="text" id="' . $key . '" class="' . $css_class . '" name="array_key[' . $key . ']" value="' . $this->$key . '" ' . $add_opt . '>';
-	}
+    }
 
-	public function create_use_autologin_field() {
-		echo '<input type="checkbox" id="use_autologin" name="array_key[use_autologin]" value="1" ' . ($this->use_autologin == '1' ? 'checked="checked"' : '' ) . '>';
-	}
+    public function print_bool_field($key) {
+		echo '<input type="checkbox" id="' . $key . '" name="array_key[' . $key . ']" value="1" ' . ($this->$key == '1' ? 'checked="checked"' : '' ) . '>';
+    }
 
 	/**
 	 * wp-login.php with openid connect
@@ -226,13 +250,13 @@ class GenericOpenIDConnect {
 
 		if ( isset( $_GET['plugin-error'] ) ) {
 			echo $this->styled_error_message( $_GET['plugin-error'] );
-		} elseif ( $this->use_autologin && !isset( $_GET['loggedout']) ){
-			wp_redirect($this->ep_login . '&client_id=' . urlencode($this->client_id) . '&redirect_uri=' . urlencode($this->redirect_url));
+		} elseif ( $this->use_autologin && !isset( $_GET['loggedout'] ) ){
+			wp_redirect( $this->ep_login . '?scope=' . urlencode( $this->scope ) . '&response_type=code&client_id=' . urlencode( $this->client_id ) . '&redirect_uri=' . urlencode( $this->redirect_url ) );
 			exit;
 		}
 	}
 
-	private function style_error_message($errno) {
+	private function styled_error_message($errno) {
 		$message = self::$ERR_MES[$errno];
 		return '<div style="padding:10px;background-color:#FFDFDD;border:1px solid #ced9ea;border-radius:3px;-webkit-border-radius:3px;-moz-border-radius:3px;"><p style="line-height:1.6em;"><strong>Error!</strong>&nbsp;' . $message . '</p></div><br>';
 	}
@@ -252,20 +276,17 @@ class GenericOpenIDConnect {
 				'openid_connect_section_info'
 			), 'openid-connect-setting-admin');
 
-		add_settings_field( 'use_autologin', 'Activate auto-login',	array( 
-				$this,
-				'create_use_autologin_field'
-			),
-			'openid-connect-setting-admin', 'setting_section_id');
-
 		foreach ( self::$PARAMETERS as $key => $description ) {
-			if ( in_array( $key, array( 'use_autologin', 'allowed_regex' ) ) ) {
+			if ( in_array( $key, array( 'use_autologin', 'no_sslverify' ) ) ) {
+				add_settings_field( $key, $description, array( $this, 'print_bool_field' ), 'openid-connect-setting-admin', 'setting_section_id', $key );
+			} elseif ( $key == 'redirect_url' ) {
+				add_settings_field( $key, $description, array( $this, 'print_text_field' ), 'openid-connect-setting-admin', 'setting_section_id', array( $key, 'large-text', 'readonly="true"' ));
+			} elseif ( $key == 'allowed_regex' ) {
 				continue;
 			} else {
 				add_settings_field( $key, $description, array( $this, 'print_text_field' ), 'openid-connect-setting-admin', 'setting_section_id', array( $key, 'large-text', '' ));
 			}
 		}
-		add_settings_field( 'redirect_url', 'Redirect URL', array( $this, 'print_text_field' ), 'openid-connect-setting-admin', 'setting_section_id', array( 'redirect_url', 'large-text', 'readonly="true"' ));
 
 		add_settings_section( 'app_setting_section_id', 'Authorization Settings', array( 
 				$this, 
