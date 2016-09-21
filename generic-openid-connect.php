@@ -43,7 +43,7 @@ class GenericOpenIDConnect {
 	);
 
 	public function __construct() {
-		add_action( 'login_form', array( &$this, 'login_form' ) );
+		add_action( 'login_init', array( &$this, 'login_init' ) );
 		if ( is_admin() ) {
 			//AJAX stuff
 			add_action( 'wp_ajax_openidconn-callback', array( $this, 'callback' ) );
@@ -246,7 +246,7 @@ class GenericOpenIDConnect {
 	 * @access public
 	 * @return void
 	 */
-	public function login_form() {
+	public function login_init() {
 
 		if ( isset( $_GET['plugin-error'] ) ) {
 			echo $this->styled_error_message( $_GET['plugin-error'] );
