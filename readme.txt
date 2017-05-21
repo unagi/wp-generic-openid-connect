@@ -3,7 +3,7 @@ Contributors: shirounagi
 Tags: security, login, oauth2, openidconnect, apps, authentication, autologin
 Requires at least: 3.0.1
 Tested up to: 3.8.2
-Stable tag: 1.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,7 +18,7 @@ has been obtained, user is automatically created in WordPress database.
 
 == Installation ==
 
-- Upload `generic-openid-connect.php` to the `/wp-content/plugins/` directory
+- Upload `generic-openid-connect.php` and `class-genericopenidconnect.php` to the `/wp-content/plugins/` directory
 
 - Activate the plugin through the 'Plugins' menu in WordPress
 
