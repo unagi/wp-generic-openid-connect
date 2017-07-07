@@ -1,4 +1,6 @@
-=== Plugin Name ===
+[![Build Status](https://travis-ci.org/unagi/wp-generic-openid-connect.svg?branch=master)](https://travis-ci.org/unagi/wp-generic-openid-connect)
+
+### Plugin Name
 Contributors: shirounagi
 Tags: security, login, oauth2, openidconnect, apps, authentication, autologin
 Requires at least: 3.0.1
@@ -9,14 +11,14 @@ License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
 Provides automatic authentication against OpenID Connect API.
 
-== Description ==
+## Description
 
 This plugin allows to authenticate users against OpenID Connect OAuth2 API with Authorization Code Flow.
 Once installed and properly configured, it will start redirecting to IdP consent page. After consent
 has been obtained, user is automatically created in WordPress database.
 
 
-== Installation ==
+## Installation
 
 - Upload `generic-openid-connect.php` to the `/wp-content/plugins/` directory
 
@@ -26,13 +28,13 @@ has been obtained, user is automatically created in WordPress database.
 respective fields on the plugin settings page.
 
 
-== Frequently Asked Questions ==
+## Frequently Asked Questions
 
 Nothing has been asked yet.
 
 
-== Changelog ==
+## Changelog
 
-= 1.0 =
+### 1.0
 First version
 
