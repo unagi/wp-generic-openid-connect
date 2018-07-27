@@ -91,7 +91,8 @@ class GenericOpenIDConnect {
 		$token_response = json_decode( $token_result['body'], true );
 		if ( isset( $token_response['id_token'] ) ) {
 			$jwt_arr = explode('.', $token_response['id_token'] );
-			$user_claim = json_decode( base64_decode($jwt_arr[1] ), true );
+			$urlunsafe_data = str_replace(array('_','-', '.'), array('+', '/', '='), $jwt_arr[1]);
+			$user_claim = json_decode( base64_decode($urlunsafe_data), true );
 		} elseif ( isset( $token_response['access_token'] ) ){
 			$user_claim_result = wp_remote_get(
 				$this->ep_userinfo . '?access_token=' . $token_response['access_token'],
