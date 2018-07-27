@@ -12,8 +12,11 @@ branches:
     - master
 
 php:
-  - 5.3
-  - 5.6
+  - '5.4'
+  - '5.6'
+  - '7.0'
+  - '7.1'
+  - '7.2'
 
 env:
   - WP_VERSION=latest WP_MULTISITE=0
@@ -22,7 +25,7 @@ env:
 
 matrix:
   include:
-    - php: 5.3
+    - php: 5.4
       env: WP_VERSION=latest WP_MULTISITE=1
 
 before_script:
